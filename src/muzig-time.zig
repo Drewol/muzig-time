@@ -33,6 +33,8 @@ pub const MusicError = error{
     NoTimeSig,
 };
 
+/// A structure for calculating time in a song that contains bpm and time signature changes. 
+/// Currently the functions for this structure assumes that the bpms and timeSigs lists are sorted at all times.
 pub const MusicTime = struct {
     bpms: std.ArrayList(BpmChange),
     timeSigs: std.ArrayList(TimeSigChange),
@@ -68,7 +70,8 @@ pub const MusicTime = struct {
         self.bpms.deinit();
         self.timeSigs.deinit();
     }
-
+    
+    /// Converts tick # to discrete time in seconds.
     pub fn timeAtTick(self: *MusicTime, tick: i64) !f64 {
         try self.validate();
         var result: f64 = 0.0;
@@ -85,6 +88,7 @@ pub const MusicTime = struct {
         return result;
     }
 
+    /// Converts discrete time in seconds to tick #.
     pub fn tickAtTime(self: *MusicTime, time: f64) !f64 {
         try self.validate();
         var remaining = time;
@@ -103,6 +107,7 @@ pub const MusicTime = struct {
         return @intToFloat(f64, result) + ticksFromSecs(remaining, prev.bpm, self.resolution);
     }
 
+    /// Get the measure # for any given tick #
     pub fn measureAtTick(self: *MusicTime, tick: i64) !i64 {
         try self.validate();
 
@@ -135,6 +140,7 @@ pub const MusicTime = struct {
         return result;
     }
 
+    /// Get the tick # at the start of any given measure #
     pub fn tickAtMeasure(self: *MusicTime, measure: i64) !i64 {
         try self.validate();
 
@@ -159,6 +165,7 @@ pub const MusicTime = struct {
         return result;
     }
 
+    /// Get the BPM at any given tick #
     pub fn bpmAtTick(self: *MusicTime, tick: i64) MusicError!f64 {
         if (self.bpms.items.len == 0) {
             return error.NoBPM;

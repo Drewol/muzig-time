@@ -92,7 +92,7 @@ pub const MusicTime = struct {
         var prev = self.bpms.items[0];
 
         for (self.bpms.items) |bpm| {
-            const new_time = try self.timeAtTick(bpm.tick);
+            const new_time = try self.timeAtTick(bpm.tick); //bad time complexity
             if (new_time > time) {
                 break;
             }
@@ -101,6 +101,78 @@ pub const MusicTime = struct {
             prev = bpm;
         }
         return @intToFloat(f64, result) + ticksFromSecs(remaining, prev.bpm, self.resolution);
+    }
+
+    pub fn measureAtTick(self: *MusicTime, tick: i64) !i64 {
+        try self.validate();
+
+        var ret: i64 = 0;
+        var remaining_ticks: i64 = tick;
+
+        const first_sig = self.timeSigs.items[0];
+
+        var prev_measure = first_sig.measure;
+        var prev_ticks_per_measure: i64 = self.resolution * 4 * first_sig.n / first_sig.d;
+        if (prev_ticks_per_measure == 0) {
+            return ret;
+        }
+        for (self.timeSigs.items[1..self.timeSigs.items.len]) |current_sig| {
+            const measure_count = current_sig.measure - prev_measure;
+            const tick_count = measure_count * prev_ticks_per_measure;
+            if (tick_count > remaining_ticks) {
+                break;
+            }
+            ret += measure_count;
+            remaining_ticks -= tick_count;
+            prev_measure = current_sig.measure;
+            prev_ticks_per_measure = self.resolution * 4 * current_sig.n / current_sig.d;
+            if (prev_ticks_per_measure == 0) {
+                return ret;
+            }
+        }
+        ret += @divFloor(remaining_ticks, prev_ticks_per_measure);
+
+        return ret;
+    }
+
+    pub fn tickAtMeasure(self: *MusicTime, measure: i64) !i64 {
+        try self.validate();
+
+        var ret: i64 = 0;
+        var remaining_measures: i64 = measure;
+        const first_sig = self.timeSigs.items[0];
+
+        var prev_measure = first_sig.measure;
+        var prev_ticks_per_measure = self.resolution * 4 * first_sig.n / first_sig.d;
+        for (self.timeSigs.items[1..self.timeSigs.items.len]) |current_sig| {
+            const measure_count = current_sig.measure - prev_measure;
+            if (measure_count > remaining_measures) {
+                break;
+            }
+            ret += measure_count * prev_ticks_per_measure;
+            remaining_measures -= measure_count;
+            prev_measure = current_sig.measure;
+            prev_ticks_per_measure = self.resolution * 4 * current_sig.n / current_sig.d;
+        }
+        ret += remaining_measures * prev_ticks_per_measure;
+
+        return ret;
+    }
+
+    pub fn bpmAtTick(self: *MusicTime, tick: i64) MusicError!f64 {
+        if (self.bpms.items.len == 0) {
+            return error.NoBPM;
+        }
+
+        var prev = self.bpms.items[0];
+
+        for (self.bpms.items[1..self.bpms.items.len]) |b| {
+            if (b.tick > tick) {
+                break;
+            }
+            prev = b;
+        }
+        return prev.bpm;
     }
 };
 
@@ -161,4 +233,34 @@ test "tick conversion equality /w bpm changes" {
     const calculatedTick = try times.tickAtTime(calculatedTime);
 
     expect(@floatToInt(i64, @round(calculatedTick)) == test_tick);
+}
+
+test "tick to measure, simple" {
+    var times = try MusicTime.init(120.0, 4, 4, 240, test_allocator);
+    defer times.deinit();
+
+    const calculatedMeasure = try times.measureAtTick(240 * (4 * 512 + 1));
+    expect(calculatedMeasure == 512);
+}
+
+test "measure to tick, simple" {
+    var times = try MusicTime.init(120.0, 4, 4, 240, test_allocator);
+    defer times.deinit();
+
+    const calculatedTick = try times.tickAtMeasure(50);
+    expect(calculatedTick == 240 * 4 * 50);
+}
+
+test "bpm@tick /w bpm changes" {
+    var times = try MusicTime.init(120.0, 4, 4, 240, test_allocator);
+    defer times.deinit();
+
+    try times.bpms.append(BpmChange{ .bpm = 124.0, .tick = 682 });
+    try times.bpms.append(BpmChange{ .bpm = 182.0, .tick = 900 });
+    try times.bpms.append(BpmChange{ .bpm = 100.0, .tick = 2400 });
+
+    expect((try times.bpmAtTick(0)) == 120.0);
+    expect((try times.bpmAtTick(690)) == 124.0);
+    expect((try times.bpmAtTick(901)) == 182.0);
+    expect((try times.bpmAtTick(2500)) == 100.0);
 }

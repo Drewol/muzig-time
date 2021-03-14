@@ -106,57 +106,57 @@ pub const MusicTime = struct {
     pub fn measureAtTick(self: *MusicTime, tick: i64) !i64 {
         try self.validate();
 
-        var ret: i64 = 0;
-        var remaining_ticks: i64 = tick;
+        var result: i64 = 0;
+        var remainingTicks: i64 = tick;
 
-        const first_sig = self.timeSigs.items[0];
+        const firstSig = self.timeSigs.items[0];
 
-        var prev_measure = first_sig.measure;
-        var prev_ticks_per_measure: i64 = self.resolution * 4 * first_sig.n / first_sig.d;
-        if (prev_ticks_per_measure == 0) {
-            return ret;
+        var prevMeasure = firstSig.measure;
+        var prevTicksPerMeasure: i64 = self.resolution * 4 * firstSig.n / firstSig.d;
+        if (prevTicksPerMeasure == 0) {
+            return result;
         }
         for (self.timeSigs.items[1..self.timeSigs.items.len]) |current_sig| {
-            const measure_count = current_sig.measure - prev_measure;
-            const tick_count = measure_count * prev_ticks_per_measure;
-            if (tick_count > remaining_ticks) {
+            const measureCount = current_sig.measure - prevMeasure;
+            const tickCount = measureCount * prevTicksPerMeasure;
+            if (tickCount > remainingTicks) {
                 break;
             }
-            ret += measure_count;
-            remaining_ticks -= tick_count;
-            prev_measure = current_sig.measure;
-            prev_ticks_per_measure = self.resolution * 4 * current_sig.n / current_sig.d;
-            if (prev_ticks_per_measure == 0) {
-                return ret;
+            result += measureCount;
+            remainingTicks -= tickCount;
+            prevMeasure = current_sig.measure;
+            prevTicksPerMeasure = self.resolution * 4 * current_sig.n / current_sig.d;
+            if (prevTicksPerMeasure == 0) {
+                return result;
             }
         }
-        ret += @divFloor(remaining_ticks, prev_ticks_per_measure);
+        result += @divFloor(remainingTicks, prevTicksPerMeasure);
 
-        return ret;
+        return result;
     }
 
     pub fn tickAtMeasure(self: *MusicTime, measure: i64) !i64 {
         try self.validate();
 
-        var ret: i64 = 0;
-        var remaining_measures: i64 = measure;
-        const first_sig = self.timeSigs.items[0];
+        var result: i64 = 0;
+        var remainingMeasures: i64 = measure;
+        const firstSig = self.timeSigs.items[0];
 
-        var prev_measure = first_sig.measure;
-        var prev_ticks_per_measure = self.resolution * 4 * first_sig.n / first_sig.d;
-        for (self.timeSigs.items[1..self.timeSigs.items.len]) |current_sig| {
-            const measure_count = current_sig.measure - prev_measure;
-            if (measure_count > remaining_measures) {
+        var prevMeasure = firstSig.measure;
+        var prevTicksPerMeasure = self.resolution * 4 * firstSig.n / firstSig.d;
+        for (self.timeSigs.items[1..self.timeSigs.items.len]) |currentSig| {
+            const measureCount = currentSig.measure - prevMeasure;
+            if (measureCount > remainingMeasures) {
                 break;
             }
-            ret += measure_count * prev_ticks_per_measure;
-            remaining_measures -= measure_count;
-            prev_measure = current_sig.measure;
-            prev_ticks_per_measure = self.resolution * 4 * current_sig.n / current_sig.d;
+            result += measureCount * prevTicksPerMeasure;
+            remainingMeasures -= measureCount;
+            prevMeasure = currentSig.measure;
+            prevTicksPerMeasure = self.resolution * 4 * currentSig.n / currentSig.d;
         }
-        ret += remaining_measures * prev_ticks_per_measure;
+        result += remainingMeasures * prevTicksPerMeasure;
 
-        return ret;
+        return result;
     }
 
     pub fn bpmAtTick(self: *MusicTime, tick: i64) MusicError!f64 {
